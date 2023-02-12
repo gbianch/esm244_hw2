@@ -2,23 +2,42 @@
 title: "Hw2 Task 2"
 author: "Grace Bianchi"
 date: "2023-02-12"
-output: html_document
+output: 
+  html_document:
+    code_folding: hide
 ---
 
+Overview:
+
+
+This code wrangles palmetto data .......
+
+Data source: Abrahamson, W.G. 2019. Survival, growth and biomass estimates of two dominant palmetto species of south-central Florida from 1981 - 2017, ongoing at 5-year intervals ver 1. Environmental Data Initiative. https://doi.org/10.6073/pasta/f2f96ec76fbbd4b9db431c79a770c4d5
 
 ```{r setup, include=TRUE, message= FALSE, warning = FALSE, echo = TRUE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 library(tidyverse)
 library(here)
+library(patchwork)
+library(kableExtra)
+library(broom)
+library(purrr)
 
 ```
 
 In a separate .Rmd, using the Florida palmetto data (palmetto.csv), use binary logistic regression to test feasibility of using variables plant height (height), canopy length (length), canopy width (width), and number of green leaves (green_lvs) to classify whether a palmetto is species Serenoa repens or Sabal etonia. 
 
 
-Data source: Abrahamson, W.G. 2019. Survival, growth and biomass estimates of two dominant palmetto species of south-central Florida from 1981 - 2017, ongoing at 5-year intervals ver 1. Environmental Data Initiative. https://doi.org/10.6073/pasta/f2f96ec76fbbd4b9db431c79a770c4d5
-Get the data: palmetto.csv
+
+```{r}
+palmetto_data <- read_csv(here("palmetto.csv")) %>% 
+  mutate(species_name = case_when( # rename species
+    species == 1 ~ "Serenoa repens",
+     species == 2 ~ "Sabal etonia")) %>% 
+  mutate(species = as.factor(species), species = fct_drop(species)) 
+  
+```
 
 
 More information and metadata: https://portal.edirepository.org/nis/metadataviewer?packageid=edi.317.1
@@ -27,12 +46,97 @@ An overview section describing the data, the question(s) to be addressed in your
 
 
 
-A section containing 2 - 3 finalized (customized, suitable for a publication) data visualizations (with figure captions) in which you explore differences in height, canopy length, canopy width, and green leaves for the two species. If you prefer, combine the figures into a compound figure using {patchwork} or {cowplot}. Below your data visualizations, add a sentence or two with a takeaway from the plots, e.g., based on these plots, which predictor variables are more likely to help classify species correctly?
+A section containing 2 - 3 finalized (customized, suitable for a publication) data visualizations (with figure captions) in which you explore differences in height, canopy length, canopy width, and green leaves for the two species.
+
+## Data Exploration and Visualization
+
+
+```{r, fig.align='center', fig.width=6, fig.height=4}
+p1 <- ggplot(data = palmetto_data, aes(x = height, y = length)) +
+  geom_point(aes(color = species_name), size = .5) +
+  labs(x = "Canopy Height (cm)",
+       y = "Canopy Length (cm)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+p2<- ggplot(data = palmetto_data, aes(x = width, y = green_lvs)) +
+  geom_point(aes(color = species_name)) +
+  labs(x = "Canopy width (cm)",
+       y = "Count of green leaves (n)") +
+  theme_minimal() 
+
+p1 + p2
+```
+
+The plot on the right examines variation in canopy height and length by species, while the graph on the right shows variation in the number of leaves and canopy width as a function of species. From this preliminary analysis, it appears that Sabal etonia have a greater canopy length, smaller canopy width, and lower counts of green leaves compare to Serenoa repens. Based on these plots, canopy width and count of green leaves are 'good' predictor variables to classify species. 
+
+### Binary Logistic Regression
+
+In order to determine the probability of a plant being either Serenoa repens or Sabal etonia, a binary logistic regression is used to compare two models using various predictor variables
+
 A section in which you perform binary logistic regression to determine the probability of a plant being either Serenoa repens or Sabal etonia based on several predictor variables.  Perform the analysis twice, using cross validation to compare two models:
+
+
+#### Model 1
+
 Log odds of plant type using plant height, canopy length, canopy width and green leaves as predictor variable.
+
+```{r}
+f1 <- species ~ height + length + width + green_lvs
+
+mdl1 <- glm(formula = f1, data = palmetto_data, family = "binomial")
+
+summary(mdl1) 
+
+mdl1_tidy <- tidy(mdl1) %>% 
+  kable(caption = "Model 1 Variable Coefficients") %>% 
+  kable_classic()
+
+#AIC(mdl1)
+# AIC: 5194.562
+```
+
+- The coefficient for height, `r round(mdl1_tidy[2,2], 5)`, indicates that on average we expect the log odds of a plant being a Sabal etonia decreases by `r round(mdl1_tidy[2,2], 5)` for each 1 cm increase in plant height (see `mdl1_tidy` - this coefficient is not significant).
+
+#### Model 2
+
 Log odds of plant type using plant height, canopy width and green leaves (i.e., drop canopy length for this model)
-Make sure you understand which species is the first ‘0’ factor level, and which is ‘1’ - you may want to convert to a factor first, then use the levels() function to check.  Use repeated cross validation (ten-fold cross validation, repeated at least ten times - you can use functions from the {tidymodels} package to automate this, or manually perform the analysis using for-loops or {purrr} functions).  Based on the results of the cross validation, describe which model performs better at classification; you may wish to compare AICC and BIC values as well to support your decision. 
+
+```{r}
+f2 <- species ~ height + width + green_lvs
+
+mdl2 <- glm(f2, data = palmetto_data, family = "binomial")
+
+summary(mdl2) 
+
+tidy(mdl2) %>% 
+  kable(caption = "Model 2 Variable Coefficients") %>% 
+  kable_classic()
+
+AIC(mdl2)
+
+# AIC: 5987.47
+```
+
+
+
+
+
+Make sure you understand which species is the first ‘0’ factor level, and which is ‘1’ - you may want to convert to a factor first, then use the levels() function to check. 
+Use repeated cross validation (ten-fold cross validation, repeated at least ten times - you can use functions from the {tidymodels} package to automate this, or manually perform the analysis using for-loops or {purrr} functions).  Based on the results of the cross validation, describe which model performs better at classification; you may wish to compare AICC and BIC values as well to support your decision. 
+
+
+
+
 Train your selected model using the entire dataset, and create a finalized table (e.g., knitr::kable() and {kableExtra} functions) containing the binary logistic regression model results (at least coefficients, standard errors for the coefficients, and information for significance - consider using broom::tidy() to get you most of the way). 
+
+
+
+
 A section that evaluates how successfully this model would “classify” a plant as the correct species, using a 50% cutoff (e.g. if the probability is >=50% that it is species A, then it would be classified as species A). Use broom::augment() to find the probabilities (instead of log-odds) for each plant in the original dataset, then add a column for which species your model would classify that plant as (using a 50% cutoff) based on the included predictor variables. The outcome should be a finalized table showing, for each species, how many plants in the original dataset would be correctly classified and how many were incorrectly classified by the model, as well as an additional column with “% correctly classified”. Add a table caption above the table, and a 1-2 sentence conclusion paragraph after.
+
+
+
+
 To submit Task 1, knit to HTML. Ensure that all messages, warnings are hidden but all attached packages are visible (setup chunk included). Code should be available if we click on the Code button (use code folding in your R Markdown YAML header). Upload your file to GauchoSpace.
 
