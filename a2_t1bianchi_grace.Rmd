@@ -10,8 +10,10 @@ output:
 Overview:
 
 
-This code wrangles palmetto data .......
+This code wrangles Florida palmetto data and uses binary logistic regression to test the feasibility of using variables plant height (height), canopy length (length), canopy width (width), and number of green leaves (green_lvs) to classify whether a palmetto is species Serenoa repens or Sabal etonia. A ten-fold cross validation was used to compare two models, with the number of green leaves vs. without including the number of green leaves.
 
+More information and metadata: https://portal.edirepository.org/nis/metadataviewer?packageid=edi.317.1
+ 
 Data source: Abrahamson, W.G. 2019. Survival, growth and biomass estimates of two dominant palmetto species of south-central Florida from 1981 - 2017, ongoing at 5-year intervals ver 1. Environmental Data Initiative. https://doi.org/10.6073/pasta/f2f96ec76fbbd4b9db431c79a770c4d5
 
 ```{r setup, include=TRUE, message= FALSE, warning = FALSE, echo = TRUE}
@@ -22,34 +24,25 @@ library(here)
 library(patchwork)
 library(kableExtra)
 library(broom)
-library(purrr)
+library(tidymodels)
 
 ```
 
-In a separate .Rmd, using the Florida palmetto data (palmetto.csv), use binary logistic regression to test feasibility of using variables plant height (height), canopy length (length), canopy width (width), and number of green leaves (green_lvs) to classify whether a palmetto is species Serenoa repens or Sabal etonia. 
 
 
-
-```{r}
+```{r read in the data}
 palmetto_data <- read_csv(here("palmetto.csv")) %>% 
   mutate(species_name = case_when( # rename species
     species == 1 ~ "Serenoa repens",
      species == 2 ~ "Sabal etonia")) %>% 
-  mutate(species = as.factor(species), species = fct_drop(species)) 
+  mutate(species = as.factor(species), species = fct_drop(species)) # set species column as factor, not numeric
   
 ```
-
-
-More information and metadata: https://portal.edirepository.org/nis/metadataviewer?packageid=edi.317.1
-For this task, produce a final, professionally formatted knitted HTML that contains the following: 
-An overview section describing the data, the question(s) to be addressed in your analysis, and a citation of the dataset.
-
 
 
 A section containing 2 - 3 finalized (customized, suitable for a publication) data visualizations (with figure captions) in which you explore differences in height, canopy length, canopy width, and green leaves for the two species.
 
 ## Data Exploration and Visualization
-
 
 ```{r, fig.align='center', fig.width=6, fig.height=4}
 p1 <- ggplot(data = palmetto_data, aes(x = height, y = length)) +
@@ -84,19 +77,44 @@ Log odds of plant type using plant height, canopy length, canopy width and green
 ```{r}
 f1 <- species ~ height + length + width + green_lvs
 
-mdl1 <- glm(formula = f1, data = palmetto_data, family = "binomial")
+blr_mdl1 <- glm(formula = f1, data = palmetto_data, family = "binomial")
 
-summary(mdl1) 
 
-mdl1_tidy <- tidy(mdl1) %>% 
+blr_mdl1_tidy <- tidy(blr_mdl1) 
+
+blr_mdl1_tidy %>% 
   kable(caption = "Model 1 Variable Coefficients") %>% 
   kable_classic()
 
-#AIC(mdl1)
-# AIC: 5194.562
+
 ```
 
-- The coefficient for height, `r round(mdl1_tidy[2,2], 5)`, indicates that on average we expect the log odds of a plant being a Sabal etonia decreases by `r round(mdl1_tidy[2,2], 5)` for each 1 cm increase in plant height (see `mdl1_tidy` - this coefficient is not significant).
+- The coefficient for height indicates that on average we expect the log odds of a plant being a Sabal etonia decreases by `r round(blr_mdl1_tidy[2,2], 5)` for each 1 cm increase in plant height
+
+```{r}
+ggplot(data = palmetto_data, aes(x = species, y = height)) +
+  geom_jitter(aes(color = species))
+## Species 2 (Sabel estonia) has a distribution of height that is silently lower than species 1 height distribution
+```
+
+- The coefficient for canopy length indicates that on average we expect the log odds of a plant being a Sabal etonia increases by `r round(blr_mdl1_tidy[3,2], 5)` for each 1 cm increase in canopy length (this coefficient is significant)
+
+```{r}
+ggplot(data = palmetto_data, aes(x = species, y = length)) +
+  geom_jitter(aes(color = species))
+## Species 2 (Sabel estonia) has a distribution of height that is silently lower than species 1 height distribution
+```
+
+
+- The coefficient for canopy width indicates that, on average, we expect the log odds of a plant being a Sabal etonia increases by `r round(blr_mdl1_tidy[4,2], 5)` for each 1 cm increase in canopy width (this coefficient is significant)
+
+```{r} 
+# converts the log odds to the probability of being Sabal etonia for each observation.
+blr1_fitted <- blr_mdl1 %>%
+  broom::augment(type.predict = "response")
+
+```
+
 
 #### Model 2
 
@@ -105,25 +123,57 @@ Log odds of plant type using plant height, canopy width and green leaves (i.e., 
 ```{r}
 f2 <- species ~ height + width + green_lvs
 
-mdl2 <- glm(f2, data = palmetto_data, family = "binomial")
+blr_mdl2 <- glm(f2, data = palmetto_data, family = "binomial")
 
-summary(mdl2) 
+blr_mdl2_tidy <- tidy(blr_mdl2) 
 
-tidy(mdl2) %>% 
+blr_mdl2_tidy %>% 
   kable(caption = "Model 2 Variable Coefficients") %>% 
   kable_classic()
 
-AIC(mdl2)
 
-# AIC: 5987.47
+
 ```
 
 
 
-
-
-Make sure you understand which species is the first ‘0’ factor level, and which is ‘1’ - you may want to convert to a factor first, then use the levels() function to check. 
 Use repeated cross validation (ten-fold cross validation, repeated at least ten times - you can use functions from the {tidymodels} package to automate this, or manually perform the analysis using for-loops or {purrr} functions).  Based on the results of the cross validation, describe which model performs better at classification; you may wish to compare AICC and BIC values as well to support your decision. 
+
+### Ten-fold cross validation
+
+```{r}
+set.seed(444) ### set seed for reproducibility! here to set the folds
+
+tidy_folds <- vfold_cv(palmetto_data, v = 10)
+
+
+### use a workflow that bundles the logistic model and a formula
+blr_model <- logistic_reg() %>%
+   set_engine('glm')
+
+blr_tidy_wf1 <- workflow() %>%
+  add_model(blr_model) %>%
+  add_formula(f1)
+
+blr_tidy_cv_f1 <- blr_tidy_wf1 %>%
+  fit_resamples(tidy_folds)
+
+### use functions from the tune package to extract metrics
+cv_blr1_metrics <- collect_metrics(blr_tidy_cv_f1)
+
+
+```
+
+
+```{r}
+
+#AIC(mdl1)
+# AIC: 5194.562
+#AIC(mdl2)
+# AIC: 5987.47
+
+AICcmodavg::aictab(list(blr_mdl1, blr_mdl2)) 
+```
 
 
 
@@ -132,9 +182,30 @@ Train your selected model using the entire dataset, and create a finalized table
 
 
 
+A section that evaluates how successfully this model would “classify” a plant as the correct species, using a 50% cutoff (e.g. if the probability is >=50% that it is species A, then it would be classified as species A). 
 
-A section that evaluates how successfully this model would “classify” a plant as the correct species, using a 50% cutoff (e.g. if the probability is >=50% that it is species A, then it would be classified as species A). Use broom::augment() to find the probabilities (instead of log-odds) for each plant in the original dataset, then add a column for which species your model would classify that plant as (using a 50% cutoff) based on the included predictor variables. The outcome should be a finalized table showing, for each species, how many plants in the original dataset would be correctly classified and how many were incorrectly classified by the model, as well as an additional column with “% correctly classified”. Add a table caption above the table, and a 1-2 sentence conclusion paragraph after.
+Use broom::augment() to find the probabilities (instead of log-odds) for each plant in the original dataset, then add a column for which species your model would classify that plant as (using a 50% cutoff) based on the included predictor variables. T
 
+
+he outcome should be a finalized table showing, for each species, how many plants in the original dataset would be correctly classified and how many were incorrectly classified by the model, as well as an additional column with “% correctly classified”. Add a table caption above the table, and a 1-2 sentence conclusion paragraph after.
+
+### Predictions
+
+```{r eval = FALSE}
+
+
+ex_1 <- predict(ad_chin_blr1,
+                data.frame(sex = "female",
+                  body_mass_g = 3410,
+                  flipper_length_mm = 192),
+                # tell it type = 'response' to get prob, not log odds
+                type = "response")
+ 
+# Based on the model, the probability that this penguin is a Chinstrap is 0.4.
+
+
+
+```
 
 
 
