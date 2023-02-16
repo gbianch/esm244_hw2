@@ -10,7 +10,7 @@ output:
 Overview:
 
 
-This code wrangles Florida palmetto data and uses binary logistic regression to test the feasibility of using variables plant height (height), canopy length (length), canopy width (width), and number of green leaves (green_lvs) to classify whether a palmetto is species Serenoa repens or Sabal etonia. A ten-fold cross validation was used to compare two models, with the number of green leaves vs. without including the number of green leaves.
+This code wrangles Florida palmetto data and uses binary logistic regression to test the feasibility of using variables plant height (height), canopy length (length), canopy width (width), and number of green leaves (green_lvs) to classify whether a palmetto is species Serenoa repens or Sabal etonia. A ten-fold cross validation was used to compare the two models, with the number of green leaves vs. without including the number of green leaves.
 
 More information and metadata: https://portal.edirepository.org/nis/metadataviewer?packageid=edi.317.1
  
