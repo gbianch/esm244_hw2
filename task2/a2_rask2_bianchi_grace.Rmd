@@ -1,0 +1,87 @@
+---
+title: "Assignment 2 Task 2"
+author: "Grace Bianchi"
+date: "2023-02-16"
+output: 
+  html_document:
+    code_folding:hide
+---
+
+Description: Non-linear least squares is used to estimate the parameters of a length to weight model for lizard populations in New Mexico. 
+
+
+Raw data and metadata including species codes available at https://doi.org/10.6073/pasta/4a6e258fb49c31e222ecbbcfd128967f. 
+
+**Citation:** Lightfoot, D. and W.G. Whitford. 2020. Lizard pitfall trap data from 11 NPP study locations at the Jornada Basin LTER site, 1989-2006 ver 37. Environmental Data Initiative. https://doi.org/10.6073/pasta/4a6e258fb49c31e222ecbbcfd128967f
+
+```{r setup, include= TRUE, message = FALSE, warning = FALSE, echo = TRUE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(here)
+
+```
+
+
+```{r read in the data}
+lizard_data <- read_csv(here("task2", "lizards.csv")) %>% 
+  mutate(log_weight = log(weight),
+         log_length = log(SV_length))
+
+
+```
+
+Fit a snout length to weight model of the following form to all lizards in your dataframe.
+Weight is given by W, snout to vent length by SVL, and a and b are the parameters that need to be fitted. 
+
+
+$$
+W = a(SVL)^b
+$$
+```{r}
+ggplot(data = lizard_data, aes(x = weight, y = SV_length)) +
+  geom_point(aes(color = sex))
+
+
+ggplot(data = lizard_data, aes(x = log_weight, y = log_length)) +
+  geom_point(aes(color = sex))
+
+```
+
+Since we know the model is exponential in nature, we could log transform the data. If we do a standard OLS regression on the log transformed data, we can get approximations of the parameters from the regression coefficients
+
+
+```{r}
+my_guess_model <- lm(log_weight ~ log_length, data = lizard_data) 
+
+summary(my_guess_model)
+
+```
+
+```{r}
+lizard_nls <-(weight~svl_model(svl,a,b),
+              data = lizard_data,
+              start = list(a = , b = ),
+              trace = TRUE)
+```
+
+```{r}
+
+svl_model <-function(svl, a, b){
+  w = a*log(svl)^b
+  return(w)
+}
+  
+
+```
+
+
+Using the coefficients function, we can then supply the NLS start list with the regression coefficients. Hint: Because you log transformed the data, you will have to mathematically transform the intercept coefficient to get the guess for parameter a.
+
+
+Present your fitted model on a plot with female and male lizards separated by color. You should include the NLS model in kable output of the html.
+
+
+
+Filter out the dataset for male Western Whiptail lizard (Cnemidophorus tigrisatus). Fit an NLS model to this subset. Compare the output from the species specific NLS model to the general NLS model for all species by graphing the model fits on the Western Whiptail male data. Report the RMSE for both models in the figure caption. Also in the figure caption briefly discuss which model should be used and why.
+
