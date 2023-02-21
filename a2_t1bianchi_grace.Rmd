@@ -10,21 +10,20 @@ output:
 Overview:
 
 
-This code wrangles Florida palmetto data and uses binary logistic regression to test the feasibility of using variables plant height (height), canopy length (length), canopy width (width), and number of green leaves (green_lvs) to classify whether a palmetto is species Serenoa repens or Sabal etonia. A ten-fold cross validation was used to compare the two models, with the number of green leaves vs. without including the number of green leaves.
+This code wrangles Florida palmetto data and uses binary logistic regression to test the feasibility of using variables plant height (height), canopy length (length), canopy width (width), and number of green leaves (green_lvs) to classify whether a palmetto is species *Serenoa repens* or *Sabal etonia*. A ten-fold cross validation was used to compare the two models, with the number of green leaves vs. without including the number of green leaves.
 
-More information and metadata: https://portal.edirepository.org/nis/metadataviewer?packageid=edi.317.1
- 
-Data source: Abrahamson, W.G. 2019. Survival, growth and biomass estimates of two dominant palmetto species of south-central Florida from 1981 - 2017, ongoing at 5-year intervals ver 1. Environmental Data Initiative. https://doi.org/10.6073/pasta/f2f96ec76fbbd4b9db431c79a770c4d5
+
+**Data source**: Abrahamson, W.G. 2019. Survival, growth and biomass estimates of two dominant palmetto species of south-central Florida from 1981 - 2017, ongoing at 5-year intervals ver 1. Environmental Data Initiative. https://doi.org/10.6073/pasta/f2f96ec76fbbd4b9db431c79a770c4d5
 
 ```{r setup, include=TRUE, message= FALSE, warning = FALSE, echo = TRUE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 library(tidyverse)
 library(here)
-library(patchwork)
-library(kableExtra)
+library(patchwork) # plotting
+library(kableExtra) # tables
 library(broom)
-library(tidymodels)
+library(tidymodels) # cross-validation
 
 ```
 
@@ -39,10 +38,9 @@ palmetto_data <- read_csv(here("palmetto.csv")) %>%
   
 ```
 
-
-A section containing 2 - 3 finalized (customized, suitable for a publication) data visualizations (with figure captions) in which you explore differences in height, canopy length, canopy width, and green leaves for the two species.
-
 ## Data Exploration and Visualization
+
+Exploring the differences in height, canopy length, canopy width, and green leaves for the two species; *Serenoa repens* and *Sabal etonia*.
 
 ```{r, fig.align='center', fig.width=6, fig.height=4}
 p1 <- ggplot(data = palmetto_data, aes(x = height, y = length)) +
@@ -61,64 +59,59 @@ p2<- ggplot(data = palmetto_data, aes(x = width, y = green_lvs)) +
 p1 + p2
 ```
 
-The plot on the right examines variation in canopy height and length by species, while the graph on the right shows variation in the number of leaves and canopy width as a function of species. From this preliminary analysis, it appears that Sabal etonia have a greater canopy length, smaller canopy width, and lower counts of green leaves compare to Serenoa repens. Based on these plots, canopy width and count of green leaves are 'good' predictor variables to classify species. 
+**Figure 1.** The plot on the right examines variation in canopy height and length by species, while the graph on the right shows variation in the number of leaves and canopy width as a function of species. From this preliminary analysis, it appears that *Sabal etonia* have a greater canopy length, smaller canopy width, and lower counts of green leaves compare to *Serenoa repens*. Based on these plots, canopy width and count of green leaves are 'good' predictor variables to classify species. 
 
 ### Binary Logistic Regression
 
-In order to determine the probability of a plant being either Serenoa repens or Sabal etonia, a binary logistic regression is used to compare two models using various predictor variables
+Two models are compared and a binary logistic regression is used to determine the probability of a plant being either *Serenoa repens* or *Sabal etonia*. A ten-fold cross validation is used to compare the two models.
 
-A section in which you perform binary logistic regression to determine the probability of a plant being either Serenoa repens or Sabal etonia based on several predictor variables.  Perform the analysis twice, using cross validation to compare two models:
-
-
-#### Model 1
-
-Log odds of plant type using plant height, canopy length, canopy width and green leaves as predictor variable.
+#### Model 1: plant height, canopy length and width, and number of green leaves predictor variables
 
 ```{r}
 f1 <- species ~ height + length + width + green_lvs
 
 blr_mdl1 <- glm(formula = f1, data = palmetto_data, family = "binomial")
 
-
 blr_mdl1_tidy <- tidy(blr_mdl1) 
 
 blr_mdl1_tidy %>% 
-  kable(caption = "Model 1 Variable Coefficients") %>% 
-  kable_classic()
-
+  kable(caption = "Table 1. Model 1 Predictor Variable Coefficients", digits = 5,
+        col.names= c("Variable", "Coefficient", "Standard Error", "Statistic", "P-value"))  %>% 
+  kable_classic() %>% 
+  kable_styling(full_width =  FALSE)
 
 ```
 
-- The coefficient for height indicates that on average we expect the log odds of a plant being a Sabal etonia decreases by `r round(blr_mdl1_tidy[2,2], 5)` for each 1 cm increase in plant height
+
+- The coefficient for height indicates that on average we expect the log odds of a plant being a Sabal etonia decreases by `r round(blr_mdl1_tidy[2,2], 3)` for each 1 cm increase in plant height
+
+- The coefficient for canopy length indicates that on average we expect the log odds of a plant being a Sabal etonia increases by `r round(blr_mdl1_tidy[3,2], 3)` for each 1 cm increase in canopy length (this coefficient is significant)
+
+- The coefficient for canopy width indicates that, on average, we expect the log odds of a plant being a Sabal etonia increases by `r round(blr_mdl1_tidy[4,2], 3)` for each 1 cm increase in canopy width (this coefficient is significant)
+
 
 ```{r}
-ggplot(data = palmetto_data, aes(x = species, y = height)) +
-  geom_jitter(aes(color = species))
+explore_p1 <- ggplot(data = palmetto_data, aes(x = species_name, y = height)) +
+  geom_jitter(aes(color = species_name)) +
+  theme(legend.position = "none") +
+  labs(x = "")
+
 ## Species 2 (Sabel estonia) has a distribution of height that is silently lower than species 1 height distribution
+
+explore_p2 <- ggplot(data = palmetto_data, aes(x = species_name, y = length)) +
+  geom_jitter(aes(color = species_name)) +
+  theme(legend.position = "none") +
+  labs(x = "")
+  
+## Species 2 (Sabel estonia) has a distribution of height that is silently lower than species 1 length distribution
+
+explore_p1 + explore_p2 
 ```
 
-- The coefficient for canopy length indicates that on average we expect the log odds of a plant being a Sabal etonia increases by `r round(blr_mdl1_tidy[3,2], 5)` for each 1 cm increase in canopy length (this coefficient is significant)
-
-```{r}
-ggplot(data = palmetto_data, aes(x = species, y = length)) +
-  geom_jitter(aes(color = species))
-## Species 2 (Sabel estonia) has a distribution of height that is silently lower than species 1 height distribution
-```
+Figure 2. These exploratory plots show the *Sabel estonia* observations have a lower height and greater length than the *Serenoa repens*, which supports the variable coefficients provided.
 
 
-- The coefficient for canopy width indicates that, on average, we expect the log odds of a plant being a Sabal etonia increases by `r round(blr_mdl1_tidy[4,2], 5)` for each 1 cm increase in canopy width (this coefficient is significant)
-
-```{r} 
-# converts the log odds to the probability of being Sabal etonia for each observation.
-blr1_fitted <- blr_mdl1 %>%
-  broom::augment(type.predict = "response")
-
-```
-
-
-#### Model 2
-
-Log odds of plant type using plant height, canopy width and green leaves (i.e., drop canopy length for this model)
+#### Model 2: plant height, canopy width and green leaves predictor variables
 
 ```{r}
 f2 <- species ~ height + width + green_lvs
@@ -128,86 +121,105 @@ blr_mdl2 <- glm(f2, data = palmetto_data, family = "binomial")
 blr_mdl2_tidy <- tidy(blr_mdl2) 
 
 blr_mdl2_tidy %>% 
-  kable(caption = "Model 2 Variable Coefficients") %>% 
-  kable_classic()
-
-
+  kable(caption = 'Table 2. Model 2 Predictor Variable Coefficients', digits = 5, 
+        col.names= c("Variable", "Coefficient", "Standard Error", "Statistic", "P-value")) %>% 
+  kable_classic() %>% 
+  kable_styling(full_width =  FALSE)
 
 ```
 
-
-
-Use repeated cross validation (ten-fold cross validation, repeated at least ten times - you can use functions from the {tidymodels} package to automate this, or manually perform the analysis using for-loops or {purrr} functions).  Based on the results of the cross validation, describe which model performs better at classification; you may wish to compare AICC and BIC values as well to support your decision. 
+Both models had
 
 ### Ten-fold cross validation
 
 ```{r}
 set.seed(444) ### set seed for reproducibility! here to set the folds
 
-tidy_folds <- vfold_cv(palmetto_data, v = 10)
-
+n_folds <- vfold_cv(palmetto_data, v = 10, repeats = 10)
 
 ### use a workflow that bundles the logistic model and a formula
 blr_model <- logistic_reg() %>%
    set_engine('glm')
 
+## model 1 
 blr_tidy_wf1 <- workflow() %>%
   add_model(blr_model) %>%
   add_formula(f1)
 
 blr_tidy_cv_f1 <- blr_tidy_wf1 %>%
-  fit_resamples(tidy_folds)
+  fit_resamples(n_folds)
 
 ### use functions from the tune package to extract metrics
 cv_blr1_metrics <- collect_metrics(blr_tidy_cv_f1)
 
+# run for model 2
+blr_tidy_wf2 <- workflow() %>%
+  add_model(blr_model) %>%
+  add_formula(f2)
+
+blr_tidy_cv_f2 <- blr_tidy_wf2 %>%
+  fit_resamples(n_folds)
+
+### use functions from the tune package to extract metrics
+cv_blr2_metrics <- collect_metrics(blr_tidy_cv_f2)
 
 ```
 
 
 ```{r}
+## cross validation tables
+cv_blr1_metrics %>% kable(caption = "Table 3. Cross validation Metrics for Model 1",
+                          col.names = c("Metric", "Estimator", "Mean", "n", "Standard Error", "configuration"),
+                          digits = 5) %>% 
+  remove_column(.,6) %>% 
+  kable_classic() %>% 
+  kable_styling(full_width =  FALSE, position = "float_left")
 
-#AIC(mdl1)
-# AIC: 5194.562
-#AIC(mdl2)
-# AIC: 5987.47
+cv_blr2_metrics %>% kable(caption = "Table 4. Cross validation Metrics for Model 2",
+                          col.names = c("Metric", "Estimator", "Mean", "n", "Standard Error", "configuration"),
+                          digits = 5) %>% 
+  remove_column(.,6) %>% 
+  kable_classic() %>% 
+  kable_styling(full_width =  FALSE)
 
-AICcmodavg::aictab(list(blr_mdl1, blr_mdl2)) 
+
 ```
 
-
-
-
-Train your selected model using the entire dataset, and create a finalized table (e.g., knitr::kable() and {kableExtra} functions) containing the binary logistic regression model results (at least coefficients, standard errors for the coefficients, and information for significance - consider using broom::tidy() to get you most of the way). 
-
+After comparing the results of the cross validation, Model 1 (mean = `r round(cv_blr1_metrics$mean[1],4)`) had a greater accuracy when compared to Model 2 (mean = `r round(cv_blr2_metrics$mean[1],4)`). Thus, we can conclude Model 1 is the better model when predicting palmetto species. 
 
 
 A section that evaluates how successfully this model would “classify” a plant as the correct species, using a 50% cutoff (e.g. if the probability is >=50% that it is species A, then it would be classified as species A). 
 
-Use broom::augment() to find the probabilities (instead of log-odds) for each plant in the original dataset, then add a column for which species your model would classify that plant as (using a 50% cutoff) based on the included predictor variables. T
+
+### Model 1 Species Predictions
+
+```{r}
+# converts the log odds to the probability of being Sabal etonia for each observation.
+blr1_fitted <- blr_mdl1 %>%
+  broom::augment(type.predict = "response")
 
 
-he outcome should be a finalized table showing, for each species, how many plants in the original dataset would be correctly classified and how many were incorrectly classified by the model, as well as an additional column with “% correctly classified”. Add a table caption above the table, and a 1-2 sentence conclusion paragraph after.
-
-### Predictions
-
-```{r eval = FALSE}
-
-
-ex_1 <- predict(ad_chin_blr1,
-                data.frame(sex = "female",
-                  body_mass_g = 3410,
-                  flipper_length_mm = 192),
-                # tell it type = 'response' to get prob, not log odds
-                type = "response")
- 
-# Based on the model, the probability that this penguin is a Chinstrap is 0.4.
-
-
+blr1_acc <- blr1_fitted %>% 
+  # predict species using 50% threshold
+  mutate(spp_prediction = ifelse(.fitted > 0.5, "2", "1")) %>% 
+ # add score for correct predictions
+  mutate(spp_accuracy = ifelse(spp_prediction == species, "yes", "no")) %>% 
+  group_by(species) %>% 
+  summarize(n_correct = sum(spp_accuracy == "yes"),
+            n_incorrect = sum(spp_accuracy == "no"),
+            pct_correct = (n_correct/(n_correct + n_incorrect))*100) %>% 
+  mutate(pct_correct = round(pct_correct, digits = 1))
 
 ```
 
+```{r}
+# make table with number of incorrect and correct predictions
+blr1_acc %>% 
+  kable(caption = "Table 5. Plant Classification using Model 1",
+        col.names = c("Species", "Correctly classified (n)", "Incorrectly classified (n)", "% Correctly classified")) %>% 
+  kable_classic() %>% 
+  kable_styling(full_width = FALSE)
+```
 
 
-To submit Task 1, knit to HTML. Ensure that all messages, warnings are hidden but all attached packages are visible (setup chunk included). Code should be available if we click on the Code button (use code folding in your R Markdown YAML header). Upload your file to GauchoSpace.
-
+Model 1 was used to classify each plant, in which it correctly identified `r round((blr1_acc[1,4] + blr1_acc[2,4])/2, 2)` %  or `r (blr1_acc[1,2] + blr1_acc[2,2])` plants out of `r blr1_acc[1,2] + blr1_acc[2,2] + blr1_acc[1,3] + blr1_acc[2,3]`. In conclusion, Model 1 was the better predictor for species classification using plant height, canopy width, canopy length, and number of green leaves as predictor variables. 
